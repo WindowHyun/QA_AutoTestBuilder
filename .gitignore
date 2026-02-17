@@ -32,3 +32,12 @@ Thumbs.db
 .env
 secrets.json
 secret.key
+
+# 8. 로그 파일
+logs/
+*.log
+
+# 9. 데이터베이스 파일
+*.db
+*.sqlite
+*.sqlite3

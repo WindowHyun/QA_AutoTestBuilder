@@ -1,24 +1,172 @@
+"""
+테스트 스크립트 생성기 모듈
+
+Pytest + Allure 기반 테스트 스크립트를 생성합니다.
+"""
+
 import config
 import os
+import re
+from typing import List, Dict, Optional, Set
+from utils.locator_utils import get_by_string
+from core.browser_config import BrowserConfig
+from core.plugin_manager import PluginManager
+
 
 class ScriptGenerator:
-    def generate(self, url, steps, is_headless=False, excel_path=None):
-        """Pytest 스크립트 생성 (Keys, Hover 추가)"""
-        
-        if is_headless:
-            headless_setup = """    options.add_argument("--headless=new")
-    options.add_argument("--window-size=1920,1080")"""
+    """Pytest 테스트 스크립트 생성기"""
+
+    def __init__(self):
+        self.plugin_manager = PluginManager()
+
+    # 지원하는 액션 목록
+    SUPPORTED_ACTIONS = {
+        "click", "input", "input_password", "check_text", "check_url",
+        "press_key", "hover", "switch_frame", "switch_default",
+        "accept_alert", "dismiss_alert", "drag_source", "drop_target",
+        "comment"
+    }
+
+    # 값이 필요한 액션
+    VALUE_REQUIRED_ACTIONS = {"input", "input_password", "check_text", "check_url", "press_key"}
+
+    def _generate_shadow_dom_finder(self, shadow_path: List[Dict], final_locator: str, final_type: str) -> str:
+        """
+        Shadow DOM 요소 찾기 코드 생성
+
+        Args:
+            shadow_path: Shadow DOM 호스트 경로
+            final_locator: 최종 요소 로케이터
+            final_type: 최종 요소 로케이터 타입
+
+        Returns:
+            str: JavaScript 코드를 실행하는 Python 코드
+        """
+        js_parts = ["let root = document;"]
+
+        for i, host in enumerate(shadow_path):
+            if isinstance(host, dict):
+                selector = host.get("value", "").replace("'", "\\'")
+            else:
+                selector = str(host).replace("'", "\\'")
+            js_parts.append(f"let host{i} = root.querySelector('{selector}');")
+            js_parts.append(f"if (!host{i} || !host{i}.shadowRoot) return null;")
+            js_parts.append(f"root = host{i}.shadowRoot;")
+
+        # 최종 요소 찾기
+        escaped_locator = final_locator.replace("'", "\\'")
+        if final_type in ["CSS", "CSS_SELECTOR"]:
+            js_parts.append(f"return root.querySelector('{escaped_locator}');")
         else:
-            headless_setup = '    options.add_argument("--start-maximized")'
+            # XPath의 경우
+            js_parts.append(f"""
+                let result = document.evaluate(
+                    '{escaped_locator}',
+                    root,
+                    null,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
+                    null
+                );
+                return result.singleNodeValue;
+            """)
+
+        js_code = "\\n".join(js_parts)
+        return f'''driver.execute_script("""{js_code}""")'''
+
+    def validate_steps(self, steps: List[Dict], excel_columns: Optional[List[str]] = None) -> List[str]:
+        """
+        스텝 데이터 검증
+
+        Args:
+            steps: 테스트 스텝 리스트
+            excel_columns: 엑셀 컬럼 목록 (DDT 검증용)
+
+        Returns:
+            list: 경고/에러 메시지 목록
+        """
+        warnings = []
+
+        for i, step in enumerate(steps):
+            step_num = i + 1
+            action = step.get("action", "")
+
+            # 지원하지 않는 액션
+            if action not in self.SUPPORTED_ACTIONS:
+                warnings.append(f"Step {step_num}: 알 수 없는 액션 '{action}'")
+
+            # 값 필수 액션 검증
+            if action in self.VALUE_REQUIRED_ACTIONS:
+                value = step.get("value", "")
+                if not value and action != "press_key":
+                    warnings.append(f"Step {step_num}: '{action}' 액션에 값이 필요합니다")
+
+            # Excel 변수 검증
+            if excel_columns:
+                value = step.get("value", "")
+                variables = re.findall(r"\{(.+?)\}", value)
+                for var in variables:
+                    if var not in excel_columns:
+                        warnings.append(f"Step {step_num}: 변수 '{{{var}}}'가 엑셀에 없습니다")
+
+            # 로케이터 검증
+            if action not in ["check_url", "comment", "accept_alert", "dismiss_alert", "switch_default"]:
+                if not step.get("locator"):
+                    warnings.append(f"Step {step_num}: 로케이터가 비어있습니다")
+
+        return warnings
+
+    def get_used_variables(self, steps: List[Dict]) -> Set[str]:
+        """스텝에서 사용된 Excel 변수 추출"""
+        variables = set()
+        for step in steps:
+            value = step.get("value", "")
+            matches = re.findall(r"\{(.+?)\}", value)
+            variables.update(matches)
+        return variables
+    def generate(self, url, steps, is_headless=False, excel_path=None,
+                 browser_type="chrome", use_builtin_reporter=None): # Changed default to None
+        """
+        Pytest 스크립트 생성
+
+        Args:
+            url: 테스트 URL
+            steps: 테스트 스텝 리스트
+            is_headless: 헤드리스 모드 여부
+            excel_path: 엑셀 데이터 파일 경로
+            browser_type: 브라우저 종류
+            use_builtin_reporter: 내장 HTML 리포터 사용 여부 (None=config 설정 따름)
+
+        Returns:
+            str: 생성된 pytest 스크립트
+        """
+        # 설정값 우선순위 처리
+        if use_builtin_reporter is None:
+            use_builtin_reporter = config.USE_BUILTIN_REPORTER
+
+        # 중앙화된 브라우저 설정 사용
+        browser_code = BrowserConfig.generate_driver_code(browser_type, is_headless)
+        browser_import = browser_code["imports"]
+        browser_init = browser_code["init"]
+        headless_setup = browser_code["headless"]
+        browser_options = browser_code["options"]
+        browser_driver = browser_code["driver"]
 
         data_loader_code = ""
         decorator_code = ""
         test_args = "driver"
         
+        # 리포터 관련 임포트 및 데코레이터 설정
+        if use_builtin_reporter:
+            reporter_import = "from core.pytest_html_plugin import step, attach_screenshot"
+            feature_decorator = "" # 내장 리포터는 별도 데코레이터 없음 (플러그인이 처리)
+        else:
+            reporter_import = "import allure"
+            feature_decorator = '@allure.feature("자동 생성된 테스트 시나리오")'
+
         if excel_path:
             safe_excel_path = excel_path.replace("\\", "/")
             data_loader_code = f"""
-import pandas as pd
+import openpyxl
 import sys
 import os
 
@@ -29,9 +177,30 @@ def get_excel_data():
         print(f"[ERROR] 파일 없음: {{file_path}}")
         return []
     try:
-        df = pd.read_excel(file_path, engine='openpyxl').fillna("")
-        df.columns = [str(c).strip() for c in df.columns]
-        data = df.to_dict(orient='records')
+        data = []
+        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+        sheet = wb.active
+        # 헤더 읽기
+        rows = sheet.iter_rows(values_only=True)
+        try:
+            headers = next(rows)
+            headers = [str(h).strip() for h in headers if h is not None]
+        except StopIteration:
+            print("[WARN] 데이터 없음")
+            return []
+
+        # 데이터 읽기
+        for row in rows:
+            row_data = {{}}
+            # 헤더 길이만큼만 데이터 매핑
+            for i, h in enumerate(headers):
+                if i < len(row):
+                    val = row[i]
+                    row_data[h] = str(val) if val is not None else ""
+                else:
+                    row_data[h] = ""
+            data.append(row_data)
+
         if not data: print("[WARN] 데이터 없음")
         return data
     except Exception as e:
@@ -41,41 +210,68 @@ def get_excel_data():
             decorator_code = '@pytest.mark.parametrize("row_data", get_excel_data())'
             test_args = "driver, row_data"
 
-        script = f"""
+        script = f'''
 import pytest
-import allure
+{reporter_import}
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys  # [New] Keys 추가
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.chrome.service import Service
+{browser_import}
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 {data_loader_code}
 
+# [Helper] Safe String Formatter
+class SafeData(dict):
+    def __missing__(self, key):
+        print(f"[WARN] 엑셀에 변수 '{{key}}'가 없습니다. 빈 값으로 처리합니다.")
+        return ""
+
+# [Helper] Smart Wait
+def wait_for_network_idle(driver, timeout=5):
+    """
+    스마트 대기:
+    1. document.readyState == 'complete'
+    2. jQuery.active == 0 (if present)
+    3. No active animations
+    """
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("""
+                // 1. Page Load
+                if (document.readyState !== 'complete') return false;
+                
+                // 2. jQuery (Ajax)
+                if (window.jQuery && window.jQuery.active > 0) return false;
+                
+                // 3. Animations (Web Animations API)
+                if (document.getAnimations) {{
+                    let animations = document.getAnimations();
+                    for (let anim of animations) {{
+                        if (anim.playState === 'running' && anim.effect.getComputedTiming().progress < 1) {{
+                            return false;
+                        }}
+                    }}
+                }}
+                
+                return true;
+            """)
+        )
+    except:
+        pass
+
+
 @pytest.fixture
 def driver():
-    options = webdriver.ChromeOptions()
-    {headless_setup}
-    options.add_argument("--incognito")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    
-    prefs = {{
-        "credentials_enable_service": False,
-        "profile.password_manager_enabled": False,
-    }}
-    options.add_experimental_option("prefs", prefs)
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
+    {browser_init}
+{headless_setup}
+{browser_options}
 
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
+    {browser_driver}
     driver.get("{url}")
     yield driver
     try:
@@ -84,52 +280,142 @@ def driver():
         pass
 
 {decorator_code}
-@allure.feature("자동 생성된 테스트 시나리오")
+{feature_decorator}
 def test_scenario({test_args}):
     wait = WebDriverWait(driver, {config.EXPLICIT_WAIT})
     actions = ActionChains(driver)
     drag_source_el = None
 
     try:
-"""
+'''
 
         for i, step in enumerate(steps):
             safe_name = step['name'].replace('"', "'")
             locator_val = step["locator"]
             action = step["action"]
             value = step["value"]
-            
-            if step["type"] == "ID": locator_type = "By.ID"
-            elif step["type"] == "CSS": locator_type = "By.CSS_SELECTOR"
-            elif step["type"] == "NAME": locator_type = "By.NAME"
-            else: locator_type = "By.XPATH"
 
-            if action == "comment":
-                script += f"""
-        with allure.step("💬 {safe_name}"):
-            pass
+            # 유틸리티 함수 사용
+            locator_type = get_by_string(step["type"])
+
+            # 스텝 컨텍스트 매니저 코드 생성
+            step_context = ""
+            if use_builtin_reporter:
+                if action == "comment":
+                    step_context = f'        with step("💬 {safe_name}"):'
+                elif action in ["accept_alert", "dismiss_alert", "switch_default", "check_url"]:
+                    step_context = f'        with step("Step {i+1}: {safe_name} ({action})"):'
+                else:
+                    step_context = f'        with step("Step {i+1}: {safe_name}"):'
+            else:
+                if action == "comment":
+                    step_context = f'        with allure.step("💬 {safe_name}"):'
+                elif action in ["accept_alert", "dismiss_alert", "switch_default", "check_url"]:
+                    step_context = f'        with allure.step("Step {i+1}: {action.upper()}"):'
+                else:
+                    step_context = f'        with allure.step("Step {i+1}: {action.upper()} - {safe_name}"):'
+
+            script += f"""
+{step_context}
 """
-                continue
+            
+            if action == "comment":
+                 script += "            pass\n"
+                 continue
+
 
             value_expr = repr(value)
             if excel_path and "{" in value and "}" in value:
-                value_expr = f"'{value}'.format(**row_data)"
+                # [Stability] Safe Variable Binding (Prevent KeyError)
+                # Use global SafeData class
+                script += f"""            safe_value = '{value}'.format_map(SafeData(row_data))
+"""
+                value_expr = "safe_value"
 
-            if action in ["accept_alert", "dismiss_alert", "switch_default", "check_url"]:
-                 script += f"""
-        with allure.step("Step {i+1}: {action.upper()}"):
+
+            # Shadow DOM 요소 처리
+            # Fallback Locator Logic (Self-Healing)
+            primary_locator = {
+                "type": step["type"],
+                "value": step["locator"],
+                "name": "Primary"
+            }
+            
+            # 예비 로케이터 목록 구성
+            fallback_locators = step.get("_fallback_locators", [])
+            all_locators = [primary_locator] + fallback_locators
+            
+            # Shadow DOM은 현재 Primary만 지원 (복잡도 관리)
+            shadow_path = step.get("_shadow_path", [])
+            
+            # [Fix] condition 변수 스코프 수정
+            condition = "element_to_be_clickable" if action == "click" else "visibility_of_element_located"
+
+            if shadow_path:
+                # Shadow DOM 처리 (기존 로직 유지)
+                shadow_finder = self._generate_shadow_dom_finder(shadow_path, locator_val, step["type"])
+                script += f"""            # [Shadow DOM] 요소 찾기
+            def find_shadow_element():
+                return {shadow_finder}
+
+            try:
+                el = None
+                for _ in range(int({config.EXPLICIT_WAIT})):
+                    el = find_shadow_element()
+                    if el: break
+                    time.sleep(1)
+                if not el:
+                    raise TimeoutException("Shadow DOM 요소를 찾을 수 없습니다")
+            except Exception as e:
+                print(f"\\n[WARN] Shadow DOM 요소 찾기 실패: {{e}}")
+                raise
 """
             else:
-                script += f"""
-        with allure.step("Step {i+1}: {action.upper()} - {safe_name}"):
+                # 일반 요소: Self-Healing 로직 적용
+                script += f"""            # [Self-Healing] 요소 찾기 시도
+            el = None
+            last_error = None
+            found_locator = None
 """
-                condition = "element_to_be_clickable" if action == "click" else "visibility_of_element_located"
                 
-                script += f"""            try:
-                el = wait.until(EC.{condition}(({locator_type}, "{locator_val}")))
-            except TimeoutException:
-                print("\\n[WARN] Timeout! 요소를 찾지 못했습니다.")
-                raise
+                # 로케이터 후보군 순회 코드 생성
+                # Python 코드 내에서 리스트를 순회하는 것이 아니라, 생성된 Python 코드가 순회하도록 변경
+                
+                # 생성될 파이썬 코드의 로케이터 리스트 (문자열 리터럴로 변환)
+                py_locators = []
+                for loc in all_locators:
+                    l_type = get_by_string(loc["type"]) # By.ID, By.XPATH 등
+                    l_val = loc["value"]
+                    l_desc = loc.get("description", loc.get("name", "Unknown"))
+                    py_locators.append(f"({l_type}, '{l_val}', '{l_desc}')")
+                
+                py_locators_str = f"[{', '.join(py_locators)}]"
+
+                script += f"""
+            # [Smart Wait] 네트워크 유휴 상태 대기
+            wait_for_network_idle(driver)
+
+            locators_to_try = {py_locators_str}
+            
+            for l_type, l_val, l_desc in locators_to_try:
+                try:
+                    # 가시성 확보 대기 (Self-Healing 시에는 약간 더 짧게 시도 가능하지만 안전하게 유지)
+                    el = wait.until(EC.{condition}((l_type, l_val)))
+                    found_locator = l_desc
+                    # print(f"   -> 성공: {{l_desc}}") # 디버그용
+                    break
+                except TimeoutException as e:
+                    last_error = e
+                    continue
+                except Exception as e:
+                    last_error = e
+                    continue
+            
+            if not el:
+                raise last_error or Exception("모든 로케이터 시도 실패")
+            
+            if found_locator != '{all_locators[0].get('description', 'Primary')}':
+                 print(f"\\n[INFO] Self-Healing 동작: Primary 실패 -> {{found_locator}} 로 성공")
 """
 
             # --- 액션 로직 ---
@@ -182,10 +468,21 @@ def test_scenario({test_args}):
                 raise Exception("드래그 시작점 미설정")
 """
 
-        script += """
+        # 에러 처리 코드 생성
+        if use_builtin_reporter:
+             script += """
+    except Exception as e:
+        attach_screenshot(driver)
+        raise e
+"""
+        else:
+            script += """
     except Exception as e:
         allure.attach(driver.get_screenshot_as_png(), name="Error_Screenshot", attachment_type=allure.attachment_type.PNG)
         raise e
 """
+
+        # [Plugin Hook] 스크립트 생성 완료
+        self.plugin_manager.hook("on_script_generated", script=script, excel_path=excel_path)
 
         return script

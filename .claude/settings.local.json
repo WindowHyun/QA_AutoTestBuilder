@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(where:*)",
+      "Bash(del \"D:\\\\qa\\\\QA_AutoTestBuilder\\\\gui\\\\app.py\")"
+    ]
+  }
+}
