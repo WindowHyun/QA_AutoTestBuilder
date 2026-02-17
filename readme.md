@@ -1,4 +1,4 @@
-# QA Auto Test Builder
+# 🚀 No-Code Test Automation Builder (QA Auto Test Builder)
 
 **No-Code Selenium Test Automation Platform** allows you to create, manage, and execute automated tests without writing code.
 
@@ -48,3 +48,42 @@ python main.py
 - **Shadow DOM**: 복잡한 웹 컴포넌트 내부 요소도 자동으로 감지하고 경로를 추적합니다.
 - **검증(Assertion)**: 텍스트를 드래그하고 스캔하면 자동으로 `check_text` 검증 스텝이 생성됩니다.
 - **Self-Healing**: 요소의 속성이 변경되어도 다른 로케이터를 자동으로 시도하여 테스트 실패를 방지합니다.
+
+### 🟡 엑셀 데이터 연동하기 (DDT)
+1.  **엑셀 준비:** 첫 줄에 변수명(헤더)을 적고 데이터를 채웁니다. (예: `ID`, `PW`, `EXPECTED`)
+2.  **[📊 엑셀 데이터 연동]** 버튼을 눌러 파일을 불러옵니다.
+3.  시나리오 입력칸에 변수를 중괄호와 함께 적습니다. (예: `{ID}`, `{PW}`)
+4.  실행하면 엑셀 데이터 줄 수만큼 테스트가 반복됩니다.
+
+### 🔵 액션(Action) 종류 설명
+
+| 액션명 | 설명 | 비고 |
+| :--- | :--- | :--- |
+| **click** | 요소를 클릭합니다. | JS 강제 클릭 지원 |
+| **input** | 텍스트를 입력합니다. | |
+| **input_password** | 비밀번호를 입력합니다. | 화면 마스킹(`***`) 처리 |
+| **press_key** | 특수키를 입력합니다. | `ENTER`, `TAB` 등 |
+| **check_text** | 화면에 특정 글자가 있는지 검증합니다. | 실패 시 스크린샷 |
+| **check_url** | 페이지 URL이 변경되었는지 검증합니다. | |
+| **switch_frame** | Iframe 내부로 진입합니다. | |
+| **accept_alert** | 브라우저 경고창을 '확인'합니다. | |
+| **drag_source** | 드래그할 요소를 잡습니다. | |
+| **drop_target** | 잡은 요소를 이곳에 놓습니다. | |
+
+---
+
+## 🗺️ 개발 로드맵 (Roadmap)
+
+- [x] **v1.0 (Core):** 모듈화 구조 설계 및 기본 스캔/실행 기능
+- [x] **v2.0 (Smart):** Smart Wait, Assertion(검증), 텍스트 드래그 스캔
+- [x] **v2.5 (UX/Security):** 단축키(F2), 비밀번호 암호화, 드래그 앤 드롭
+- [x] **v3.0 (Stability):** Iframe/Alert 처리, 크롬 보안 팝업 완벽 차단
+- [x] **v4.0 (Data):** 엑셀 기반 데이터 주도 테스트(DDT) 및 변수 치환
+- [ ] **v5.0 (AI):** Self-Healing (요소 변경 시 자동 복구) 예정
+- [ ] **v6.0 (Dist):** 실행 파일(.exe) 배포 예정
+
+---
+
+## 📄 라이선스 (License)
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
