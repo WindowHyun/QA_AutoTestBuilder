@@ -1,0 +1,22 @@
+[
+    {
+        "ID": "standard_user",
+        "PW": "secret_sauce",
+        "expected_title": "Products"
+    },
+    {
+        "ID": "locked_out_user",
+        "PW": "secret_sauce",
+        "expected_title": ""
+    },
+    {
+        "ID": "problem_user",
+        "PW": "secret_sauce",
+        "expected_title": "Products"
+    },
+    {
+        "ID": "performance_glitch_user",
+        "PW": "secret_sauce",
+        "expected_title": "Products"
+    }
+]

@@ -1,0 +1,96 @@
+# ============================================================
+# QA Auto Test Builder - 실행 환경 설정
+# ============================================================
+#
+# 이 파일로 브라우저, 테스트 실행, 리포트 설정을 관리합니다.
+# 환경변수(QA_ATB_*)가 설정되어 있으면 환경변수가 우선합니다.
+#
+# 사용법:
+#   python run_tests.py                          # 이 설정파일 기본 사용
+#   python run_tests.py --config my_config.yaml  # 커스텀 설정
+#   python run_tests.py --browser firefox        # CLI로 오버라이드
+# ============================================================
+
+# ─────────────────────────────────────────────
+# 브라우저 설정
+# ─────────────────────────────────────────────
+browsers:
+  # 기본 브라우저: chrome | firefox | edge | safari (macOS only)
+  default: chrome
+
+  # 헤드리스 모드 (GUI 없이 실행, CI/CD 환경에 적합)
+  headless: false
+
+  # 브라우저별 상세 옵션
+  chrome:
+    args:
+      - "--incognito"
+      - "--no-sandbox"
+      - "--disable-dev-shm-usage"
+      - "--disable-gpu"
+      - "--disable-notifications"
+
+  firefox:
+    args:
+      - "-private"
+    preferences:
+      dom.webnotifications.enabled: false
+
+  edge:
+    args:
+      - "inprivate"
+      - "--no-sandbox"
+      - "--disable-dev-shm-usage"
+
+  safari:
+    # Safari는 macOS에서만 사용 가능
+    # SafariDriver는 macOS에 기본 포함
+    enabled: true
+
+# ─────────────────────────────────────────────
+# 테스트 실행 설정
+# ─────────────────────────────────────────────
+test:
+  # 테스트 시나리오 파일 (JSON)
+  test_file: null
+
+  # DDT 데이터 파일 (JSON/CSV/Excel)
+  data_path: null
+
+  # 병렬 워커 수 (1 = 순차 실행)
+  parallel_workers: 1
+
+  # 실패 시 자동 재시도 횟수
+  retry_count: 1
+
+  # 명시적 대기 타임아웃 (초)
+  timeout: 30
+
+  # 테스트 URL (null이면 시나리오 파일 내 URL 사용)
+  url: null
+
+# ─────────────────────────────────────────────
+# 리포트 설정
+# ─────────────────────────────────────────────
+report:
+  # 리포트 방식: allure | html
+  type: allure
+
+  # Allure 결과 디렉토리
+  allure_results_dir: allure_results
+
+  # 스크린샷 저장 디렉토리
+  screenshot_dir: screenshots
+
+  # 실패 시 스크린샷 자동 저장
+  screenshot_on_failure: true
+
+# ─────────────────────────────────────────────
+# CI/CD 설정
+# ─────────────────────────────────────────────
+ci:
+  # Slack Incoming Webhook URL (비워두면 알림 비활성화)
+  slack_webhook_url: ""
+
+  # Slack 채널 (옵션, webhook에 따라 다름)
+  slack_channel: "#qa-automation"

@@ -17,7 +17,7 @@ class BrowserConfig:
     """브라우저 설정 관리 클래스"""
 
     # 지원하는 브라우저 목록
-    SUPPORTED_BROWSERS = ["chrome", "firefox", "edge"]
+    SUPPORTED_BROWSERS = ["chrome", "firefox", "edge", "safari"]
 
     # 공통 Chrome 옵션
     CHROME_COMMON_OPTIONS = [
@@ -130,6 +130,21 @@ class BrowserConfig:
         return options
 
     @classmethod
+    def get_safari_options(cls, headless=False):
+        """
+        Safari 옵션 객체 생성 (macOS 전용)
+
+        Args:
+            headless: 헤드리스 모드 여부 (Safari는 제한적 지원)
+
+        Returns:
+            webdriver.SafariOptions: 설정된 옵션 객체
+        """
+        options = webdriver.SafariOptions()
+        # Safari는 기본 옵션만 지원, headless는 제한적
+        return options
+
+    @classmethod
     def create_driver(cls, browser_type="chrome", headless=False):
         """
         브라우저 드라이버 인스턴스 생성
@@ -161,6 +176,10 @@ class BrowserConfig:
             options = cls.get_edge_options(headless=headless)
             return webdriver.Edge(service=service, options=options)
 
+        elif browser_type == "safari":
+            options = cls.get_safari_options(headless=headless)
+            return webdriver.Safari(options=options)
+
         else:
             raise ValueError(f"지원하지 않는 브라우저: {browser_type}. "
                            f"지원 목록: {cls.SUPPORTED_BROWSERS}")
@@ -185,6 +204,8 @@ class BrowserConfig:
             return cls._firefox_code_template(headless)
         elif browser_type == "edge":
             return cls._edge_code_template(headless)
+        elif browser_type == "safari":
+            return cls._safari_code_template(headless)
         else:
             # 기본값: Chrome
             return cls._chrome_code_template(headless)
@@ -288,6 +309,29 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager"""
             headless_code = '    options.add_argument("--start-maximized")'
 
         driver_code = "driver = webdriver.Edge(service=service, options=options)"
+
+        return {
+            "imports": imports,
+            "init": init_code,
+            "headless": headless_code,
+            "options": options_code,
+            "driver": driver_code,
+        }
+
+    @classmethod
+    def _safari_code_template(cls, headless=False):
+        """Safari 드라이버 코드 템플릿 (macOS 전용)"""
+        imports = """# Safari: macOS에 기본 포함된 SafariDriver 사용"""
+
+        init_code = "options = webdriver.SafariOptions()"
+
+        options_code = "    # Safari는 기본 옵션으로 실행"
+
+        headless_code = ""
+        if headless:
+            headless_code = '    # Safari는 headless 모드를 제한적으로 지원합니다'
+
+        driver_code = "driver = webdriver.Safari(options=options)"
 
         return {
             "imports": imports,

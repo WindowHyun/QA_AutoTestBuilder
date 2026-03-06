@@ -98,6 +98,12 @@ LOG_DIR = _get_env("LOG_DIR", str(EXEC_DIR / "logs"))
 # 데이터베이스 파일 경로
 DB_PATH = _get_env("DB_PATH", str(EXEC_DIR / "testcases.db"))
 
+# DDT 데이터 디렉토리
+DATA_DIR = _get_env("DATA_DIR", str(EXEC_DIR / "data"))
+
+# 기본 데이터 포맷 (json, csv, excel)
+DEFAULT_DATA_FORMAT = _get_env("DEFAULT_DATA_FORMAT", "json")
+
 
 # ============================================================
 # 로깅 설정
@@ -129,6 +135,12 @@ DEFAULT_HEADLESS = _get_env("DEFAULT_HEADLESS", False, bool)
 # 테스트 실패 시 스크린샷 자동 저장
 SCREENSHOT_ON_FAILURE = _get_env("SCREENSHOT_ON_FAILURE", True, bool)
 
+# 테스트 실패 시 자동 재시도 횟수 (Self-Healing)
+RETRY_COUNT = _get_env("RETRY_COUNT", 1, int)
+
+# 스크린샷 저장 디렉토리
+SCREENSHOT_DIR = _get_env("SCREENSHOT_DIR", str(EXEC_DIR / "screenshots"))
+
 
 # ============================================================
 # 리포트 설정
@@ -155,10 +167,78 @@ ENCRYPTION_KEY_ENV = "ENCRYPTION_KEY"
 
 def ensure_directories():
     """필요한 디렉토리 생성"""
-    dirs = [LOG_DIR, ALLURE_RESULTS_DIR]
+    dirs = [LOG_DIR, ALLURE_RESULTS_DIR, SCREENSHOT_DIR]
     for dir_path in dirs:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
 
 
 # 모듈 로드 시 디렉토리 생성
 ensure_directories()
+
+
+# ============================================================
+# YAML 설정 파일 지원
+# ============================================================
+
+# 기본 YAML 설정 파일 경로
+YAML_CONFIG_PATH = str(EXEC_DIR / "config.yaml")
+
+
+def load_yaml_config(yaml_path=None):
+    """
+    config.yaml에서 설정을 읽어 모듈 변수를 오버라이드합니다.
+
+    우선순위: 환경변수 > YAML > 기본값
+    (환경변수가 설정된 항목은 YAML보다 우선합니다)
+
+    Args:
+        yaml_path: YAML 파일 경로 (None이면 기본 경로 사용)
+
+    Returns:
+        dict: 로드된 YAML 설정 (파일 없으면 빈 딕셔너리)
+    """
+    import yaml
+
+    path = yaml_path or YAML_CONFIG_PATH
+    if not os.path.exists(path):
+        return {}
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+
+    g = globals()
+
+    # browsers 섹션
+    browsers = cfg.get("browsers", {})
+    if browsers:
+        if "default" in browsers and not os.getenv("QA_ATB_DEFAULT_BROWSER"):
+            g["DEFAULT_BROWSER"] = browsers["default"]
+        if "headless" in browsers and not os.getenv("QA_ATB_DEFAULT_HEADLESS"):
+            g["DEFAULT_HEADLESS"] = bool(browsers["headless"])
+
+    # test 섹션
+    test = cfg.get("test", {})
+    if test:
+        if "parallel_workers" in test and not os.getenv("QA_ATB_DEFAULT_PARALLEL_WORKERS"):
+            g["DEFAULT_PARALLEL_WORKERS"] = int(test["parallel_workers"])
+        if "retry_count" in test and not os.getenv("QA_ATB_RETRY_COUNT"):
+            g["RETRY_COUNT"] = int(test["retry_count"])
+        if "timeout" in test and not os.getenv("QA_ATB_EXPLICIT_WAIT"):
+            g["EXPLICIT_WAIT"] = int(test["timeout"])
+
+    # report 섹션
+    report = cfg.get("report", {})
+    if report:
+        if "type" in report and not os.getenv("QA_ATB_USE_BUILTIN_REPORTER"):
+            g["USE_BUILTIN_REPORTER"] = (report["type"] == "html")
+        if "allure_results_dir" in report and not os.getenv("QA_ATB_ALLURE_RESULTS_DIR"):
+            g["ALLURE_RESULTS_DIR"] = str(EXEC_DIR / report["allure_results_dir"])
+        if "screenshot_dir" in report and not os.getenv("QA_ATB_SCREENSHOT_DIR"):
+            g["SCREENSHOT_DIR"] = str(EXEC_DIR / report["screenshot_dir"])
+        if "screenshot_on_failure" in report and not os.getenv("QA_ATB_SCREENSHOT_ON_FAILURE"):
+            g["SCREENSHOT_ON_FAILURE"] = bool(report["screenshot_on_failure"])
+
+    return cfg

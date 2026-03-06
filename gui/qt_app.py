@@ -25,6 +25,7 @@ from utils.database import TestCaseDB
 import pandas as pd
 from gui.qt_components import StepTableModel, ActionDelegate, ModernButton, COLORS
 from gui.data_model import DataFrameModel
+from core.data_loader import DataLoader
 
 # --- Worker Threads (Optimizations) ---
 class BrowserThread(QThread):
@@ -164,7 +165,7 @@ class AutoTestAppQt(QMainWindow):
         self.runner = TestRunner()
         self.db = TestCaseDB()
         self.steps_data = [] # List[Dict] shared with model
-        self.excel_path = None
+        self.data_path = None  # DDT 데이터 파일 경로 (JSON/CSV/Excel)
         
         # UI Setup
         self._setup_theme()
@@ -389,27 +390,27 @@ class AutoTestAppQt(QMainWindow):
     def _setup_data_tab(self):
         layout = QVBoxLayout(self.tab_data)
         
-        # Excel Load Card
+        # Data Load Card
         card = QFrame()
         card.setStyleSheet(f"background-color: {COLORS['surface']}; padding: 15px; border-radius: 8px;")
         vbox = QVBoxLayout(card)
         
-        lbl_title = QLabel("📊 Excel Data Integration (DDT)")
+        lbl_title = QLabel("📊 Data-Driven Testing (DDT)")
         lbl_title.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {COLORS['primary']};")
         vbox.addWidget(lbl_title)
         
-        lbl_desc = QLabel("Load an Excel file to parameterize your test values.\nUse {ColumnName} in the 'Value' field of your test steps.")
+        lbl_desc = QLabel("Load a JSON, CSV, or Excel file to parameterize your test values.\nUse {ColumnName} in the 'Value' field of your test steps.")
         lbl_desc.setStyleSheet(f"color: {COLORS['text_secondary']}; margin-bottom: 10px;")
         vbox.addWidget(lbl_desc)
         
         hbox = QHBoxLayout()
-        self.btn_excel = ModernButton("엑셀 파일 로드", COLORS['accent'])
-        self.btn_excel.clicked.connect(self.cmd_load_excel)
-        hbox.addWidget(self.btn_excel)
+        self.btn_data = ModernButton("데이터 파일 로드", COLORS['accent'])
+        self.btn_data.clicked.connect(self.cmd_load_data)
+        hbox.addWidget(self.btn_data)
         
-        self.lbl_excel_status = QLabel("No file loaded")
-        self.lbl_excel_status.setStyleSheet(f"color: {COLORS['text_secondary']}; margin-left: 10px;")
-        hbox.addWidget(self.lbl_excel_status)
+        self.lbl_data_status = QLabel("No file loaded")
+        self.lbl_data_status.setStyleSheet(f"color: {COLORS['text_secondary']}; margin-left: 10px;")
+        hbox.addWidget(self.lbl_data_status)
         hbox.addStretch()
         
         vbox.addLayout(hbox)
@@ -445,42 +446,80 @@ class AutoTestAppQt(QMainWindow):
         # Save Button
         hbox_save = QHBoxLayout()
         hbox_save.addStretch()
-        btn_save_excel = ModernButton("변경사항 저장 (Excel)", COLORS['primary'])
-        btn_save_excel.clicked.connect(self.cmd_save_excel)
-        hbox_save.addWidget(btn_save_excel)
+        btn_save_data = ModernButton("변경사항 저장", COLORS['primary'])
+        btn_save_data.clicked.connect(self.cmd_save_data)
+        hbox_save.addWidget(btn_save_data)
         layout.addLayout(hbox_save)
 
     @Slot()
-    def cmd_load_excel(self):
-        fname, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")
+    def cmd_load_data(self):
+        """JSON/CSV/Excel 데이터 파일 로드"""
+        fname, _ = QFileDialog.getOpenFileName(
+            self, "Select Data File", "",
+            "Data Files (*.json *.csv *.xlsx *.xls);;JSON Files (*.json);;CSV Files (*.csv);;Excel Files (*.xlsx *.xls)"
+        )
         if fname:
             try:
-                self.excel_path = fname
-                df = pd.read_excel(fname)
+                self.data_path = fname
+                ext = os.path.splitext(fname)[1].lower()
+                
+                if ext == '.json':
+                    import json
+                    with open(fname, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        for key in ('test_cases', 'data', 'rows', 'cases'):
+                            if key in data and isinstance(data[key], list):
+                                data = data[key]
+                                break
+                        else:
+                            data = [data]
+                    df = pd.DataFrame(data)
+                elif ext == '.csv':
+                    df = pd.read_csv(fname, encoding='utf-8-sig')
+                else:
+                    df = pd.read_excel(fname)
+                
+                df = df.fillna('')
                 self.df_model.set_dataframe(df)
                 
-                self.lbl_excel_status.setText(f"Loaded: {os.path.basename(fname)}")
-                # self.lbl_excel_status.setStyleSheet(f"color: {COLORS['success']}; margin-left: 10px;") # Fixed crash: key added
-                self.lbl_excel_status.setStyleSheet(f"color: #10B981; margin-left: 10px;")
-                self.status_bar.showMessage(f"Excel loaded: {fname}")
-                
-                # Update Generator
-                self.generator.excel_path = fname
+                fmt_label = ext.lstrip('.').upper()
+                self.lbl_data_status.setText(f"Loaded [{fmt_label}]: {os.path.basename(fname)}")
+                self.lbl_data_status.setStyleSheet(f"color: #10B981; margin-left: 10px;")
+                self.status_bar.showMessage(f"Data loaded: {fname}")
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to load Excel: {e}")
+                QMessageBox.critical(self, "Error", f"Failed to load data file: {e}")
 
     @Slot()
-    def cmd_save_excel(self):
-        if not self.excel_path:
-            QMessageBox.warning(self, "Warning", "No Excel file loaded.")
-            return
+    def cmd_save_data(self):
+        """데이터 파일 저장 (JSON/CSV/Excel)"""
+        if not self.data_path:
+            # 새 파일로 저장
+            fname, _ = QFileDialog.getSaveFileName(
+                self, "Save Data File", "",
+                "JSON Files (*.json);;CSV Files (*.csv);;Excel Files (*.xlsx)"
+            )
+            if not fname:
+                return
+            self.data_path = fname
 
         try:
             df = self.df_model.get_dataframe()
-            df.to_excel(self.excel_path, index=False)
-            QMessageBox.information(self, "Success", "Excel file saved successfully!")
+            ext = os.path.splitext(self.data_path)[1].lower()
+            
+            if ext == '.json':
+                import json
+                records = df.to_dict(orient='records')
+                with open(self.data_path, 'w', encoding='utf-8') as f:
+                    json.dump(records, f, ensure_ascii=False, indent=4)
+            elif ext == '.csv':
+                df.to_csv(self.data_path, index=False, encoding='utf-8-sig')
+            else:
+                df.to_excel(self.data_path, index=False)
+            
+            QMessageBox.information(self, "Success", f"Data saved: {os.path.basename(self.data_path)}")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save Excel: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to save data: {e}")
 
     @Slot()
     def cmd_add_row(self):
@@ -640,7 +679,9 @@ class AutoTestAppQt(QMainWindow):
         if dname:
             try:
                 success, msg = self.pom_generator.generate_project(
-                    dname, self.url_input.text(), self.steps_data, None, self.browser_combo.currentText().lower()
+                    dname, self.url_input.text(), self.steps_data,
+                    data_path=self.data_path,
+                    browser_type=self.browser_combo.currentText().lower()
                 )
                 if success:
                     QMessageBox.information(self, "Success", f"Project exported to:\n{dname}")
@@ -653,7 +694,9 @@ class AutoTestAppQt(QMainWindow):
     def cmd_run_test(self):
         # 1. Generate Script
         script = self.generator.generate(
-            self.url_input.text(), self.steps_data, False, self.excel_path, self.browser_combo.currentText().lower()
+            self.url_input.text(), self.steps_data, False,
+            data_path=self.data_path,
+            browser_type=self.browser_combo.currentText().lower()
         )
         with open("temp_run.py", "w", encoding="utf-8") as f:
             f.write(script)

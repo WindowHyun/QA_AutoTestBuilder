@@ -2,6 +2,7 @@
 테스트 스크립트 생성기 모듈
 
 Pytest + Allure 기반 테스트 스크립트를 생성합니다.
+Phase 2: DDT(JSON/CSV/Excel) 지원 + Allure Report 강화
 """
 
 import config
@@ -11,6 +12,7 @@ from typing import List, Dict, Optional, Set
 from utils.locator_utils import get_by_string
 from core.browser_config import BrowserConfig
 from core.plugin_manager import PluginManager
+from core.data_loader import DataLoader
 
 
 class ScriptGenerator:
@@ -123,8 +125,9 @@ class ScriptGenerator:
             matches = re.findall(r"\{(.+?)\}", value)
             variables.update(matches)
         return variables
-    def generate(self, url, steps, is_headless=False, excel_path=None,
-                 browser_type="chrome", use_builtin_reporter=None): # Changed default to None
+    def generate(self, url, steps, is_headless=False, data_path=None,
+                 browser_type="chrome", use_builtin_reporter=None,
+                 excel_path=None):  # excel_path: backward compat alias
         """
         Pytest 스크립트 생성
 
@@ -132,13 +135,18 @@ class ScriptGenerator:
             url: 테스트 URL
             steps: 테스트 스텝 리스트
             is_headless: 헤드리스 모드 여부
-            excel_path: 엑셀 데이터 파일 경로
+            data_path: 데이터 파일 경로 (JSON/CSV/Excel)
             browser_type: 브라우저 종류
             use_builtin_reporter: 내장 HTML 리포터 사용 여부 (None=config 설정 따름)
+            excel_path: (하위호환) data_path의 별칭
 
         Returns:
             str: 생성된 pytest 스크립트
         """
+        # 하위호환: excel_path → data_path
+        if data_path is None and excel_path is not None:
+            data_path = excel_path
+
         # 설정값 우선순위 처리
         if use_builtin_reporter is None:
             use_builtin_reporter = config.USE_BUILTIN_REPORTER
@@ -154,6 +162,7 @@ class ScriptGenerator:
         data_loader_code = ""
         decorator_code = ""
         test_args = "driver"
+        allure_title_decorator = ""
         
         # 리포터 관련 임포트 및 데코레이터 설정
         if use_builtin_reporter:
@@ -163,52 +172,15 @@ class ScriptGenerator:
             reporter_import = "import allure"
             feature_decorator = '@allure.feature("자동 생성된 테스트 시나리오")'
 
-        if excel_path:
-            safe_excel_path = excel_path.replace("\\", "/")
-            data_loader_code = f"""
-import openpyxl
-import sys
-import os
-
-def get_excel_data():
-    file_path = r"{safe_excel_path}"
-    print(f"\\n[INFO] 엑셀 로드 중: {{file_path}}")
-    if not os.path.exists(file_path):
-        print(f"[ERROR] 파일 없음: {{file_path}}")
-        return []
-    try:
-        data = []
-        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-        sheet = wb.active
-        # 헤더 읽기
-        rows = sheet.iter_rows(values_only=True)
-        try:
-            headers = next(rows)
-            headers = [str(h).strip() for h in headers if h is not None]
-        except StopIteration:
-            print("[WARN] 데이터 없음")
-            return []
-
-        # 데이터 읽기
-        for row in rows:
-            row_data = {{}}
-            # 헤더 길이만큼만 데이터 매핑
-            for i, h in enumerate(headers):
-                if i < len(row):
-                    val = row[i]
-                    row_data[h] = str(val) if val is not None else ""
-                else:
-                    row_data[h] = ""
-            data.append(row_data)
-
-        if not data: print("[WARN] 데이터 없음")
-        return data
-    except Exception as e:
-        print(f"\\n[FATAL] 엑셀 읽기 실패: {{e}}")
-        return []
-"""
-            decorator_code = '@pytest.mark.parametrize("row_data", get_excel_data())'
+        if data_path:
+            # DataLoader를 사용하여 포맷별 로더 코드 생성
+            loader = DataLoader()
+            data_loader_code = loader.generate_loader_code(data_path)
+            decorator_code = '@pytest.mark.parametrize("row_data", get_test_data())'
             test_args = "driver, row_data"
+            if not use_builtin_reporter:
+                allure_title_decorator = '@allure.title("테스트 시나리오 [{row_data}]")'
+
 
         script = f'''
 import pytest
@@ -221,14 +193,15 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-import time
+import os
+from datetime import datetime
 
 {data_loader_code}
 
 # [Helper] Safe String Formatter
 class SafeData(dict):
     def __missing__(self, key):
-        print(f"[WARN] 엑셀에 변수 '{{key}}'가 없습니다. 빈 값으로 처리합니다.")
+        print(f"[WARN] 데이터에 변수 '{{key}}'가 없습니다. 빈 값으로 처리합니다.")
         return ""
 
 # [Helper] Smart Wait
@@ -264,6 +237,39 @@ def wait_for_network_idle(driver, timeout=5):
     except:
         pass
 
+# [Helper] Screenshot on failure
+SCREENSHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
+
+def take_screenshot(driver, name=None):
+    os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{{name}}_{{timestamp}}.png" if name else f"screenshot_{{timestamp}}.png"
+    filepath = os.path.join(SCREENSHOT_DIR, filename)
+    try:
+        driver.save_screenshot(filepath)
+        print(f"[Screenshot] {{filepath}}")
+    except Exception as e:
+        print(f"[Screenshot Error] {{e}}")
+
+# [Helper] Retry decorator (Self-Healing)
+def retry_on_failure(max_retries={config.RETRY_COUNT}):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries:
+                        print(f"\\n[RETRY] 테스트 실패 (시도 {{attempt+1}}/{{max_retries+1}}): {{e}}")
+                        print(f"[RETRY] {{max_retries - attempt}}회 재시도 남음...")
+                    else:
+                        print(f"\\n[FAIL] 모든 재시도 소진 ({{max_retries+1}}회 시도): {{e}}")
+            raise last_exception
+        return wrapper
+    return decorator
+
 
 @pytest.fixture
 def driver():
@@ -281,6 +287,8 @@ def driver():
 
 {decorator_code}
 {feature_decorator}
+{allure_title_decorator}
+@retry_on_failure(max_retries={config.RETRY_COUNT})
 def test_scenario({test_args}):
     wait = WebDriverWait(driver, {config.EXPLICIT_WAIT})
     actions = ActionChains(driver)
@@ -325,7 +333,7 @@ def test_scenario({test_args}):
 
 
             value_expr = repr(value)
-            if excel_path and "{" in value and "}" in value:
+            if data_path and "{" in value and "}" in value:
                 # [Stability] Safe Variable Binding (Prevent KeyError)
                 # Use global SafeData class
                 script += f"""            safe_value = '{value}'.format_map(SafeData(row_data))
@@ -359,13 +367,13 @@ def test_scenario({test_args}):
                 return {shadow_finder}
 
             try:
-                el = None
-                for _ in range(int({config.EXPLICIT_WAIT})):
-                    el = find_shadow_element()
-                    if el: break
-                    time.sleep(1)
+                el = WebDriverWait(driver, {config.EXPLICIT_WAIT}).until(
+                    lambda d: find_shadow_element()
+                )
                 if not el:
                     raise TimeoutException("Shadow DOM 요소를 찾을 수 없습니다")
+            except TimeoutException:
+                raise TimeoutException("Shadow DOM 요소 대기 타임아웃")
             except Exception as e:
                 print(f"\\n[WARN] Shadow DOM 요소 찾기 실패: {{e}}")
                 raise
@@ -472,17 +480,19 @@ def test_scenario({test_args}):
         if use_builtin_reporter:
              script += """
     except Exception as e:
+        take_screenshot(driver, "error")
         attach_screenshot(driver)
         raise e
 """
         else:
             script += """
     except Exception as e:
+        take_screenshot(driver, "error")
         allure.attach(driver.get_screenshot_as_png(), name="Error_Screenshot", attachment_type=allure.attachment_type.PNG)
         raise e
 """
 
         # [Plugin Hook] 스크립트 생성 완료
-        self.plugin_manager.hook("on_script_generated", script=script, excel_path=excel_path)
+        self.plugin_manager.hook("on_script_generated", script=script, excel_path=data_path)
 
         return script
