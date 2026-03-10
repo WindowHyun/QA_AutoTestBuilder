@@ -43,6 +43,9 @@ DEFAULT_URL = _get_env("DEFAULT_URL", "https://www.saucedemo.com/")
 # 기본 브라우저 (chrome, firefox, edge)
 DEFAULT_BROWSER = _get_env("DEFAULT_BROWSER", "chrome")
 
+# 기본 실행 엔진 (selenium, playwright)
+DEFAULT_ENGINE = _get_env("ENGINE", "selenium")
+
 
 # ============================================================
 # 타임아웃 설정
@@ -216,6 +219,8 @@ def load_yaml_config(yaml_path=None):
     if browsers:
         if "default" in browsers and not os.getenv("QA_ATB_DEFAULT_BROWSER"):
             g["DEFAULT_BROWSER"] = browsers["default"]
+        if "engine" in browsers and not os.getenv("QA_ATB_ENGINE"):
+            g["DEFAULT_ENGINE"] = browsers["engine"]
         if "headless" in browsers and not os.getenv("QA_ATB_DEFAULT_HEADLESS"):
             g["DEFAULT_HEADLESS"] = bool(browsers["headless"])
 

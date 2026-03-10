@@ -7,8 +7,9 @@ import time
 reporter = HTMLReporter("latest_report.html")
 current_test = {}
 
-def on_test_start(name, **kwargs):
+def on_test_start(**kwargs):
     global current_test
+    name = kwargs.get("name", "UI Test Run")
     current_test = {
         "name": name,
         "start_time": time.time(),
@@ -27,9 +28,10 @@ def on_step_failure(error, screenshot_path, **kwargs):
     current_test["screenshot"] = screenshot_path
     print(f"[Plugin] Failure Captured: {screenshot_path}")
 
-def on_test_finish(status, **kwargs):
+def on_test_finish(**kwargs):
     if not current_test:
         return
+    status = kwargs.get("status", "unknown")
         
     duration = time.time() - current_test.get("start_time", time.time())
     

@@ -18,6 +18,9 @@ browsers:
   # 기본 브라우저: chrome | firefox | edge | safari (macOS only)
   default: chrome
 
+  # 실행 엔진: selenium | playwright
+  engine: selenium
+
   # 헤드리스 모드 (GUI 없이 실행, CI/CD 환경에 적합)
   headless: false
 

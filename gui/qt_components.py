@@ -65,10 +65,11 @@ class ModernButton(QPushButton):
 class StepTableModel(QAbstractTableModel):
     """테스트 스텝 데이터 모델 (최적화: 대량 데이터 렌더링)"""
     dataChangedSignal = Signal()
+    stepsChanged = Signal()  # 스텝 변경 시 Code Preview 갱신용
 
     def __init__(self, steps_data=None):
         super().__init__()
-        self._data = steps_data or []
+        self._data = steps_data if steps_data is not None else []
         self._headers = ["No", "Step Name", "Action", "Value", "Locator"]
 
     def rowCount(self, parent=QModelIndex()):
@@ -154,6 +155,7 @@ class StepTableModel(QAbstractTableModel):
             self._data[row]["value"] = value
         
         self.dataChanged.emit(index, index, [role])
+        self.stepsChanged.emit()
         return True
 
     def flags(self, index):
@@ -170,6 +172,7 @@ class StepTableModel(QAbstractTableModel):
         self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount())
         self._data.append(step)
         self.endInsertRows()
+        self.stepsChanged.emit()
 
     def remove_step(self, row):
         if 0 <= row < self.rowCount():
@@ -178,6 +181,7 @@ class StepTableModel(QAbstractTableModel):
             self.endRemoveRows()
             # row 번호 재정렬을 위해 전체 갱신 신호 (No 컬럼 때문에)
             self.dataChanged.emit(self.index(row, 0), self.index(self.rowCount()-1, 0))
+            self.stepsChanged.emit()
 
     def move_step(self, row, direction):
         new_row = row + direction
@@ -185,6 +189,7 @@ class StepTableModel(QAbstractTableModel):
             self.beginMoveRows(QModelIndex(), row, row, QModelIndex(), new_row if direction > 0 else new_row)
             self._data[row], self._data[new_row] = self._data[new_row], self._data[row]
             self.endMoveRows()
+            self.stepsChanged.emit()
             return True
         return False
     
@@ -197,6 +202,7 @@ class StepTableModel(QAbstractTableModel):
         self.beginResetModel()
         self._data.clear()
         self.endResetModel()
+        self.stepsChanged.emit()
 
 class ActionDelegate(QStyledItemDelegate):
     """Action 컬럼을 콤보박스로 표시하기 위한 델리게이트"""
