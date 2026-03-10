@@ -194,7 +194,9 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+from core.api_tester import APITester
 import os
+import functools
 from datetime import datetime
 
 {data_loader_code}
@@ -255,6 +257,7 @@ def take_screenshot(driver, name=None):
 # [Helper] Retry decorator (Self-Healing)
 def retry_on_failure(max_retries={config.RETRY_COUNT}):
     def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             last_exception = None
             for attempt in range(max_retries + 1):
@@ -291,8 +294,9 @@ def driver():
 {allure_title_decorator}
 @retry_on_failure(max_retries={config.RETRY_COUNT})
 def test_scenario({test_args}):
-    wait = WebDriverWait(driver, {config.EXPLICIT_WAIT})
+    wait = WebDriverWait(driver, {config.ELEMENT_TIMEOUT})
     actions = ActionChains(driver)
+    api_tester = APITester()
     drag_source_el = None
 
     try:
@@ -328,11 +332,6 @@ def test_scenario({test_args}):
 {step_context}
 """
             
-            if action == "comment":
-                 script += "            pass\n"
-                 continue
-
-
             value_expr = repr(value)
             if data_path and "{" in value and "}" in value:
                 # [Stability] Safe Variable Binding (Prevent KeyError)

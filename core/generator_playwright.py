@@ -7,6 +7,8 @@ Pytest + Playwright 기반 테스트 스크립트를 생성합니다.
 import config
 import os
 import re
+import functools
+import allure
 from typing import List, Dict, Optional, Set
 from core.plugin_manager import PluginManager
 
@@ -40,7 +42,10 @@ class PlaywrightScriptGenerator:
             "import time",
             "from playwright.sync_api import sync_playwright, expect",
             "from core.metrics import MetricsCollector",
+            "from core.api_tester import APITester",
             "import config",
+            "import functools",
+            "import allure",
             ""
         ]
 
@@ -48,6 +53,24 @@ class PlaywrightScriptGenerator:
         is_ddt = data_path or excel_path
         code.append("import json")
         code.append("import csv")
+        code.append("")
+
+        # [Helper] Retry decorator
+        code.append("def retry_on_failure(max_retries=config.RETRY_COUNT):")
+        code.append("    def decorator(func):")
+        code.append("        @functools.wraps(func)")
+        code.append("        def wrapper(*args, **kwargs):")
+        code.append("            last_exception = None")
+        code.append("            for i in range(max_retries):")
+        code.append("                try:")
+        code.append("                    return func(*args, **kwargs)")
+        code.append("                except Exception as e:")
+        code.append("                    last_exception = e")
+        code.append("                    print(f\"Attempt {i+1}/{max_retries} failed: {e}\")")
+        code.append("                    time.sleep(config.RETRY_DELAY)")
+        code.append("            raise last_exception")
+        code.append("        return wrapper")
+        code.append("    return decorator")
         code.append("")
 
         # 테스트 함수 시작
@@ -60,6 +83,7 @@ class PlaywrightScriptGenerator:
 
         # Playwright 초기화 및 브라우저 열기 코드
         code.append("    metrics = MetricsCollector()")
+        code.append("    api_tester = APITester()")
         code.append("    passed_ok = True")
         code.append("")
         code.append("    with sync_playwright() as p:")
@@ -92,7 +116,8 @@ class PlaywrightScriptGenerator:
 
             # 변수 바인딩 (간이 지원)
             if is_ddt and value and "{{" in value:
-                value_repr = f"f\"{value.replace('{{', '{data_row.get(').replace('}}', ', \\'\\')}')}\""
+                val = value.replace("{{", "{data_row.get('").replace("}}", "', '')}")
+                value_repr = f"f\"{val}\""
             else:
                 value_repr = repr(value)
                 
@@ -109,8 +134,14 @@ class PlaywrightScriptGenerator:
                 elif action == "check_url":
                     code.append(f"        assert {value_repr} in page.url")
                 elif action.startswith("api_"):
-                    code.append("        # API 테스트는 아직 Playwright 스크립트 생성기에서 완벽히 연동되지 않음")
-                    code.append("        pass")
+                    step_dict = {{
+                        "action": "{action}",
+                        "value": {value_repr},
+                        "locator": {repr(l_value)}
+                    }}
+                    code.append(f"        api_result = api_tester.execute_step({step_dict})")
+                    code.append(f"        if not api_result.passed:")
+                    code.append(f"            raise Exception(f'API 테스트 실패: {{api_result.error}}')")
                 else:
                     # 요소가 필요한 액션
                     if l_type.lower() == "xpath":

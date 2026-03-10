@@ -75,6 +75,11 @@ class HTMLReporter:
         self.suite_name = "QA Auto Test"
         self.suite_start_time = datetime.now()
         self.environment: Dict[str, str] = {}
+        self.metrics_html: str = ""
+
+    def set_metrics_html(self, html: str):
+        """MetricsCollector가 생성한 HTML 섹션 설정"""
+        self.metrics_html = html
 
     def set_suite_name(self, name: str):
         """테스트 스위트 이름 설정"""
@@ -142,7 +147,8 @@ class HTMLReporter:
             skipped=skipped,
             error=error,
             total_duration=total_duration,
-            pass_rate=pass_rate
+            pass_rate=pass_rate,
+            metrics_html=self.metrics_html
         )
 
         with open(report_path, "w", encoding="utf-8") as f:
@@ -212,6 +218,9 @@ class HTMLReporter:
 
         <!-- Environment Info -->
         {env_html}
+
+        <!-- Quality Metrics Section -->
+        {stats.get('metrics_html', '')}
 
         <!-- Test Results -->
         <section class="test-results">

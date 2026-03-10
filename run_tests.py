@@ -24,6 +24,13 @@ import json
 # 프로젝트 루트를 path에 추가
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Windows 콘솔 인코딩을 강제로 utf-8로 설정
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
 import config
 
 

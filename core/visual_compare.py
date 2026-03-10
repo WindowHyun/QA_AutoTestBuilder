@@ -13,12 +13,12 @@
 import os
 import math
 from typing import Optional
-from utils.logger import setup_logger
+from utils.logger import setup_logger  # type: ignore
 
 logger = setup_logger(__name__)
 
 try:
-    from PIL import Image, ImageDraw, ImageChops
+    from PIL import Image, ImageDraw, ImageChops  # type: ignore
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -183,15 +183,15 @@ class VisualCompare:
 
         # 차이 픽셀 수 계산 (임계값 적용)
         diff_data = diff.getdata()
-        total_pixels = len(diff_data)
+        total_pixels = len(diff_data) # type: ignore
         diff_threshold = 30  # RGB 각 채널 30 이상 차이시 "다른 픽셀"로 판단
         diff_pixels = 0
 
         for pixel in diff_data:
-            if any(ch > diff_threshold for ch in pixel):
-                diff_pixels += 1
+            if any(ch > diff_threshold for ch in pixel): # type: ignore
+                diff_pixels += 1 # type: ignore
 
-        match_percent = ((total_pixels - diff_pixels) / total_pixels * 100) if total_pixels > 0 else 100
+        match_percent = float(((total_pixels - diff_pixels) / total_pixels * 100.0) if total_pixels > 0 else 100.0) # type: ignore
 
         # 차이 이미지 저장 (차이 부분을 빨간색으로 하이라이트)
         diff_image_path = ""
@@ -262,4 +262,4 @@ class VisualCompare:
     def _safe_filename(self, name: str) -> str:
         """파일명으로 안전한 문자열 변환"""
         safe = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in name)
-        return safe[:100]  # 최대 100자
+        return safe[:100]  # type: ignore

@@ -30,7 +30,8 @@ ACTION_OPTIONS = [
     "switch_frame", "switch_default",
     "accept_alert", "dismiss_alert",
     "drag_source", "drop_target",
-    "comment"
+    "comment",
+    "api_get", "api_post", "api_put", "api_delete", "api_assert"
 ]
 
 class ModernButton(QPushButton):

@@ -400,6 +400,7 @@ class AutoTestAppQt(QMainWindow):
             # 품질 메트릭 요약 표시
             summary = self.metrics.format_summary()
             self.tab_execution.append_log(summary)
+            self.tab_execution.metrics_summary.update_metrics(self.metrics.compute())
 
             # 비주얼 리그레션 요약 표시
             vr_summary = self.visual_compare.format_summary()

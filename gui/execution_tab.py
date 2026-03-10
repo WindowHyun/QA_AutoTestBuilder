@@ -15,6 +15,65 @@ from gui.qt_components import ModernButton, COLORS
 from gui.log_widget import ColoredLogWidget
 
 
+class MetricsSummaryWidget(QFrame):
+    """실행 완료 후 메트릭 요약을 보여주는 위젯"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"background-color: {COLORS['surface']}; border-radius: 8px;")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        self.lbl_rate = self._create_metric_label("성공률", "-%")
+        self.lbl_passed = self._create_metric_label("통과", "-")
+        self.lbl_failed = self._create_metric_label("실패", "-")
+        self.lbl_duration = self._create_metric_label("평균 소요", "-s")
+        
+        layout.addWidget(self.lbl_rate)
+        layout.addWidget(self.lbl_passed)
+        layout.addWidget(self.lbl_failed)
+        layout.addWidget(self.lbl_duration)
+        self.hide()  # 초기에는 숨김 처리
+
+    def _create_metric_label(self, title, initial_val):
+        widget = QWidget()
+        vbox = QVBoxLayout(widget)
+        vbox.setContentsMargins(5, 5, 5, 5)
+        
+        lbl_title = QLabel(title)
+        lbl_title.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 11px;")
+        lbl_title.setAlignment(Qt.AlignCenter)
+        
+        lbl_val = QLabel(initial_val)
+        lbl_val.setStyleSheet(f"color: {COLORS['text']}; font-size: 18px; font-weight: bold;")
+        lbl_val.setAlignment(Qt.AlignCenter)
+        
+        vbox.addWidget(lbl_val)
+        vbox.addWidget(lbl_title)
+        return widget
+        
+    def _update_child(self, widget, color, value):
+        lbl_val = widget.layout().itemAt(0).widget()
+        lbl_val.setText(str(value))
+        lbl_val.setStyleSheet(f"color: {color}; font-size: 18px; font-weight: bold;")
+
+    def update_metrics(self, m: dict):
+        self.show()
+        rate = m.get('success_rate', 0)
+        rate_color = COLORS['primary'] if rate >= 80 else (COLORS['warning'] if rate >= 50 else COLORS['danger'])
+        
+        self._update_child(self.lbl_rate, rate_color, f"{rate}%")
+        self._update_child(self.lbl_passed, COLORS['primary'], m.get('passed', 0))
+        
+        failed = m.get('failed', 0)
+        failed_color = COLORS['danger'] if failed > 0 else COLORS['text']
+        self._update_child(self.lbl_failed, failed_color, failed)
+        
+        avg_dur = m.get('avg_duration_ms', 0) / 1000.0
+        self._update_child(self.lbl_duration, COLORS['accent'], f"{avg_dur:.2f}s")
+
+
+
 class StepResultWidget(QWidget):
     """개별 스텝 실행 결과 위젯"""
     
@@ -104,6 +163,10 @@ class ExecutionTab(QWidget):
 
         layout.addWidget(controls)
 
+        # ── Metrics Dashboard ──
+        self.metrics_summary = MetricsSummaryWidget()
+        layout.addWidget(self.metrics_summary)
+
         # ── Step-by-Step 결과 패널 ──
         self.step_panel = QFrame()
         self.step_panel.setStyleSheet(
@@ -135,6 +198,8 @@ class ExecutionTab(QWidget):
 
     def setup_steps(self, steps_data):
         """스텝 목록으로 디버깅 패널 초기화"""
+        self.metrics_summary.hide()
+        
         # 기존 위젯 정리
         for w in self._step_widgets:
             w.deleteLater()
@@ -165,6 +230,7 @@ class ExecutionTab(QWidget):
     def clear_logs(self):
         """로그 초기화"""
         self.log_view.clear()
+        self.metrics_summary.hide()
 
     # ── Internal Actions ──
 
@@ -172,11 +238,13 @@ class ExecutionTab(QWidget):
         """전체 실행 버튼 (시그널로 상위 전달)"""
         self.lbl_mode.setText("🏃 Running...")
         self.lbl_mode.setStyleSheet(f"color: {COLORS['accent']};")
+        self.metrics_summary.hide()
 
     def _on_step_clicked(self):
         """스텝 실행 버튼"""
         self.lbl_mode.setText("⏭ Step Mode")
         self.lbl_mode.setStyleSheet(f"color: {COLORS['primary']};")
+        self.metrics_summary.hide()
 
     def _on_stop_clicked(self):
         """정지 버튼"""
