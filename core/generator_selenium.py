@@ -294,7 +294,7 @@ def driver():
 {allure_title_decorator}
 @retry_on_failure(max_retries={config.RETRY_COUNT})
 def test_scenario({test_args}):
-    wait = WebDriverWait(driver, {config.ELEMENT_TIMEOUT})
+    wait = WebDriverWait(driver, {config.EXPLICIT_WAIT})
     actions = ActionChains(driver)
     api_tester = APITester()
     drag_source_el = None

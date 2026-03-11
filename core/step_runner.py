@@ -4,7 +4,7 @@ Step-by-Step 실행 엔진 (Proxy/Factory)
 config.yaml 의 engine 설정에 따라 SeleniumStepRunner 또는 PlaywrightStepRunner를 반환합니다.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, List
 import config
 from utils.logger import setup_logger
 from core.step_runner_selenium import StepResult
@@ -30,7 +30,7 @@ class StepRunner:
             logger.info("🛠️ Selenium StepRunner 활성화")
 
     @property
-    def driver(self) -> Any:
+    def driver(self) -> object:
         return self._runner.driver
 
     def reset(self):

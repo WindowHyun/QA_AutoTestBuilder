@@ -6,7 +6,7 @@ Playwright API를 사용하여 단일 스텝을 직접 실행합니다.
 
 import os
 import time
-from typing import Dict, Any
+from typing import Dict
 from utils.logger import setup_logger
 from core.api_tester import APITester
 from core.step_runner_selenium import StepResult

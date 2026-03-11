@@ -4,7 +4,7 @@ Playwright 백엔드 모듈
 Playwright 라이브러리를 사용하여 브라우저 제어를 수행합니다.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, List
 from utils.logger import setup_logger
 from core.engine_interface import BrowserEngine
 import config
@@ -17,14 +17,14 @@ class PlaywrightEngine(BrowserEngine):
     """
     
     def __init__(self):
-        self._playwright = None
-        self._browser = None
-        self._context = None
-        self._page = None
-        self._browser_type = None
+        self._playwright: object = None
+        self._browser: object = None
+        self._context: object = None
+        self._page: object = None
+        self._browser_type: Optional[str] = None
 
     @property
-    def driver(self) -> Any:
+    def driver(self) -> object:
         # Playwright에서는 Page 객체가 주된 컨텍스트
         return self._page
 
@@ -92,13 +92,13 @@ class PlaywrightEngine(BrowserEngine):
             self._browser = None
             self._playwright = None
 
-    def get_selected_element(self) -> Any:
+    def get_selected_element(self) -> object:
         return None
 
     def get_selected_text(self) -> str:
         return ""
 
-    def highlight_element(self, element=None, locator_type=None, locator_value=None):
+    def highlight_element(self, element: object = None, locator_type: Optional[str] = None, locator_value: Optional[str] = None):
         pass
 
     def enable_inspector_mode(self):

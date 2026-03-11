@@ -12,7 +12,7 @@ UI 테스트와 결합하여 Hybrid QA를 구현합니다.
 
 import json
 import time
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Union, List
 from utils.logger import setup_logger
 
 try:
@@ -22,17 +22,21 @@ except ImportError:
 
 logger = setup_logger(__name__)
 
+from dataclasses import dataclass, field
 
+@dataclass
 class APITestResult:
     """API 테스트 결과"""
+    status_code: int = 0
+    response_body: Union[Dict, List, str, None] = None
+    headers: Dict[str, str] = field(default_factory=dict)
+    duration_ms: float = 0.0
+    error: Optional[str] = None
+    request: Optional[Dict[str, Union[str, Dict]]] = None
 
-    def __init__(self, status_code: int = 0, response_body: Any = None,
-                 duration_ms: float = 0, error: str = ""):
-        self.status_code = status_code
-        self.response_body = response_body
-        self.duration_ms = duration_ms
-        self.error = error
-        self.passed = not bool(error)
+    @property
+    def passed(self) -> bool:
+        return self.error is None
 
     def to_dict(self) -> Dict:
         return {
@@ -58,9 +62,9 @@ class APITester:
         if requests is None:
             logger.warning("requests 모듈 미설치. 'pip install requests' 실행 필요")
         self._session = requests.Session() if requests else None
-        self._last_response = None
-        self._headers = {"Content-Type": "application/json"}
-        self._timeout = 30
+        self._last_response: Optional[APITestResult] = None
+        self._headers: Dict[str, str] = {"Content-Type": "application/json"}
+        self._timeout: int = 30
 
     def set_headers(self, headers: Dict):
         """커스텀 헤더 설정"""
@@ -70,15 +74,15 @@ class APITester:
         """Bearer 토큰 인증 설정"""
         self._headers["Authorization"] = f"Bearer {token}"
 
-    def get(self, url: str, params: Dict = None) -> APITestResult:
+    def get(self, url: str, params: Optional[Dict] = None) -> APITestResult:
         """GET 요청"""
         return self._request("GET", url, params=params)
 
-    def post(self, url: str, body: Any = None) -> APITestResult:
+    def post(self, url: str, body: Union[Dict, List, None] = None) -> APITestResult:
         """POST 요청"""
         return self._request("POST", url, json_body=body)
 
-    def put(self, url: str, body: Any = None) -> APITestResult:
+    def put(self, url: str, body: Union[Dict, List, None] = None) -> APITestResult:
         """PUT 요청"""
         return self._request("PUT", url, json_body=body)
 
@@ -94,7 +98,7 @@ class APITester:
             )
         return True
 
-    def assert_field(self, result: APITestResult, field_path: str, expected_value: Any) -> bool:
+    def assert_field(self, result: APITestResult, field_path: str, expected_value: object) -> bool:
         """
         JSON 응답 필드 값 검증
 
@@ -169,14 +173,14 @@ class APITester:
             return result
 
         elif action == "api_assert":
-            if not self._last_response:
+            last = self._last_response
+            if last is None:
                 return APITestResult(error="이전 API 응답 없음")
             try:
-                self.assert_field(self._last_response, value, locator)
+                self.assert_field(last, value, locator)
                 return APITestResult(
-                    status_code=self._last_response.status_code,
-                    response_body=self._last_response.response_body,
-                    passed=True
+                    status_code=last.status_code,
+                    response_body=last.response_body
                 )
             except AssertionError as e:
                 return APITestResult(error=str(e))
@@ -186,15 +190,16 @@ class APITester:
 
     # ── Internal ──
 
-    def _request(self, method: str, url: str, params: Dict = None,
-                 json_body: Any = None) -> APITestResult:
+    def _request(self, method: str, url: str, params: Optional[Dict] = None,
+                 json_body: Union[Dict, List, None] = None) -> APITestResult:
         """HTTP 요청 실행"""
-        if not self._session:
+        session = self._session
+        if session is None:
             return APITestResult(error="requests 모듈 미설치")
 
         start = time.time()
         try:
-            response = self._session.request(
+            response = session.request(
                 method, url,
                 headers=self._headers,
                 params=params,
@@ -221,7 +226,7 @@ class APITester:
             duration = (time.time() - start) * 1000
             return APITestResult(duration_ms=duration, error=str(e))
 
-    def _get_nested_value(self, data: Any, path: str) -> Any:
+    def _get_nested_value(self, data: object, path: str) -> object:
         """점(.) 구분 경로로 중첩 JSON 값 접근. 예: "data.users[0].name" """
         if data is None:
             return None
@@ -236,7 +241,8 @@ class APITester:
             # 배열 인덱스 처리
             if part.startswith("[") and part.endswith("]"):
                 try:
-                    idx = int(part[1:-1])
+                    idx_str = part.replace("[", "").replace("]", "")
+                    idx = int(idx_str)
                     if isinstance(current, (list, tuple)):
                         current = current[idx]
                     else:

@@ -8,8 +8,9 @@ QA Auto Test Builder 설정 모듈
 import os
 from pathlib import Path
 
+from typing import Any
 
-def _get_env(key: str, default, cast_type=str):
+def _get_env(key: str, default: Any, cast_type: type = str) -> Any:
     """
     환경변수에서 설정값 가져오기
 
@@ -81,7 +82,7 @@ import sys
 # 프로젝트 루트 디렉토리
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     # PyInstaller로 패키징된 경우 임시 디렉토리 사용
-    PROJECT_ROOT = Path(sys._MEIPASS).resolve()
+    PROJECT_ROOT = Path(getattr(sys, '_MEIPASS')).resolve()
     # 실행 파일이 있는 위치 (DB 저장용)
     EXEC_DIR = Path(sys.executable).parent.resolve()
 else:
@@ -172,7 +173,8 @@ def ensure_directories():
     """필요한 디렉토리 생성"""
     dirs = [LOG_DIR, ALLURE_RESULTS_DIR, SCREENSHOT_DIR]
     for dir_path in dirs:
-        Path(dir_path).mkdir(parents=True, exist_ok=True)
+        if dir_path:
+            Path(str(dir_path)).mkdir(parents=True, exist_ok=True)
 
 
 # 모듈 로드 시 디렉토리 생성
@@ -215,17 +217,17 @@ def load_yaml_config(yaml_path=None):
     g = globals()
 
     # browsers 섹션
-    browsers = cfg.get("browsers", {})
+    browsers: dict = cfg.get("browsers", {})
     if browsers:
         if "default" in browsers and not os.getenv("QA_ATB_DEFAULT_BROWSER"):
-            g["DEFAULT_BROWSER"] = browsers["default"]
+            g["DEFAULT_BROWSER"] = str(browsers["default"])
         if "engine" in browsers and not os.getenv("QA_ATB_ENGINE"):
-            g["DEFAULT_ENGINE"] = browsers["engine"]
+            g["DEFAULT_ENGINE"] = str(browsers["engine"])
         if "headless" in browsers and not os.getenv("QA_ATB_DEFAULT_HEADLESS"):
             g["DEFAULT_HEADLESS"] = bool(browsers["headless"])
 
     # test 섹션
-    test = cfg.get("test", {})
+    test: dict = cfg.get("test", {})
     if test:
         if "parallel_workers" in test and not os.getenv("QA_ATB_DEFAULT_PARALLEL_WORKERS"):
             g["DEFAULT_PARALLEL_WORKERS"] = int(test["parallel_workers"])
@@ -235,14 +237,14 @@ def load_yaml_config(yaml_path=None):
             g["EXPLICIT_WAIT"] = int(test["timeout"])
 
     # report 섹션
-    report = cfg.get("report", {})
+    report: dict = cfg.get("report", {})
     if report:
         if "type" in report and not os.getenv("QA_ATB_USE_BUILTIN_REPORTER"):
             g["USE_BUILTIN_REPORTER"] = (report["type"] == "html")
         if "allure_results_dir" in report and not os.getenv("QA_ATB_ALLURE_RESULTS_DIR"):
-            g["ALLURE_RESULTS_DIR"] = str(EXEC_DIR / report["allure_results_dir"])
+            g["ALLURE_RESULTS_DIR"] = str(EXEC_DIR / str(report["allure_results_dir"]))
         if "screenshot_dir" in report and not os.getenv("QA_ATB_SCREENSHOT_DIR"):
-            g["SCREENSHOT_DIR"] = str(EXEC_DIR / report["screenshot_dir"])
+            g["SCREENSHOT_DIR"] = str(EXEC_DIR / str(report["screenshot_dir"]))
         if "screenshot_on_failure" in report and not os.getenv("QA_ATB_SCREENSHOT_ON_FAILURE"):
             g["SCREENSHOT_ON_FAILURE"] = bool(report["screenshot_on_failure"])
 

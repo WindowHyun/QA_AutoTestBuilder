@@ -84,11 +84,13 @@ class RunnerThread(QThread):
             )
             self.runner.process = process
 
-            for line in process.stdout:
-                if self._stop_event.is_set():
-                    process.terminate()
-                    break
-                self.log_signal.emit(line)
+            stdout = process.stdout
+            if stdout is not None:
+                for line in stdout:
+                    if self._stop_event.is_set():
+                        process.terminate()
+                        break
+                    self.log_signal.emit(line)
 
             rc = process.wait()
             self.plugin_manager.hook("on_test_finish", status="PASSED" if rc == 0 else "FAILED", return_code=rc, script=self.script_path)

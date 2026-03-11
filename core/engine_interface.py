@@ -6,7 +6,8 @@ Hybrid QA(Dual Engine) 아키텍처를 지원합니다.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
+import config
 
 
 class BrowserEngine(ABC):
@@ -16,15 +17,15 @@ class BrowserEngine(ABC):
 
     @property
     @abstractmethod
-    def driver(self) -> Any:
-        """기본 드라이버 객체 (Selenium WebDriver 또는 Playwright Page)"""
+    def driver(self) -> object:
+        """기본 브라우저 드라이버/페이지 객체 반환"""
         pass
 
     @property
     @abstractmethod
     def is_alive(self) -> bool:
         """브라우저가 열려있는지 여부"""
-        pass
+        ...
 
     @abstractmethod
     def open_browser(self, url: str, browser_type: str = "chrome") -> tuple[bool, str]:
@@ -38,7 +39,7 @@ class BrowserEngine(ABC):
         Returns:
             (성공 여부, 에러 메시지)
         """
-        pass
+        ...
 
     @abstractmethod
     def close(self):
@@ -71,8 +72,8 @@ class BrowserEngine(ABC):
         pass
 
     @abstractmethod
-    def highlight_element(self, element: Any = None,
-                          locator_type: str = None,
-                          locator_value: str = None):
+    def highlight_element(self, element: object = None,
+                          locator_type: Optional[str] = None,
+                          locator_value: Optional[str] = None):
         """특정 요소 하이라이트 (빨간 테두리)"""
         pass

@@ -4,8 +4,10 @@
 config.yaml 의 engine 설정에 따라 Selenium 또는 Playwright 백엔드를 선택하여
 동일한 BrowserEngine 인터페이스를 제공하는 프록시 객체입니다.
 """
-
-from typing import Optional, Dict, Any, List
+import time
+from typing import Optional, Dict, List, TYPE_CHECKING
+if TYPE_CHECKING:
+    from core.engine_interface import BrowserEngine
 import config
 from utils.logger import setup_logger
 
@@ -18,7 +20,7 @@ class BrowserManager:
     """
     
     def __init__(self):
-        self._engine = None
+        self._engine: Optional['BrowserEngine'] = None
         self._engine_type = config.DEFAULT_ENGINE
         
         if self._engine_type == "playwright":
@@ -31,7 +33,7 @@ class BrowserManager:
             logger.info("🛠️ Selenium Engine 초기화")
 
     @property
-    def driver(self) -> Any:
+    def driver(self) -> object:
         return self._engine.driver
 
     @property
@@ -52,7 +54,7 @@ class BrowserManager:
     def close(self):
         self._engine.close()
 
-    def get_selected_element(self) -> Any:
+    def get_selected_element(self) -> object:
         return self._engine.get_selected_element()
 
     def get_selected_text(self) -> str:

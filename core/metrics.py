@@ -9,7 +9,7 @@
 """
 
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from collections import Counter
 from utils.logger import setup_logger
 
@@ -37,6 +37,9 @@ class MetricsCollector:
     }
 
     def __init__(self):
+        self._results: List[Dict[str, Union[int, float, str]]] = []
+        self._start_time: float = 0.0
+        self._end_time: Optional[float] = None
         self.reset()
 
     def reset(self):
@@ -80,19 +83,20 @@ class MetricsCollector:
         failed = sum(1 for r in self._results if r["status"] == "failed")
         skipped = sum(1 for r in self._results if r["status"] == "skipped")
 
-        durations = [r["duration_ms"] for r in self._results if r["duration_ms"] > 0]
-        total_dur = sum(durations) if durations else 0
-        avg_dur = total_dur / len(durations) if durations else 0
-        max_dur = max(durations) if durations else 0
-        min_dur = min(durations) if durations else 0
+        durations = [float(r["duration_ms"]) for r in self._results if "duration_ms" in r and float(r["duration_ms"]) > 0]
+        total_dur: float = float(sum(durations) if durations else 0.0)
+        avg_dur: float = float(total_dur / len(durations)) if durations else 0.0
+        max_dur: float = float(max(durations) if durations else 0.0)
+        min_dur: float = float(min(durations) if durations else 0.0)
 
         # 벽시계 시간 (wall clock)
-        wall_time = (self._end_time - self._start_time) * 1000 if self._end_time else total_dur
+        end = self._end_time
+        wall_time: float = float((end - self._start_time) * 1000) if end is not None else total_dur
 
         # 실패 원인 분석
         failure_analysis = self._analyze_failures()
 
-        success_rate = (passed / total * 100) if total > 0 else 0
+        success_rate: float = float((passed / total * 100) if total > 0 else 0)
 
         return {
             "total": total,
@@ -187,19 +191,21 @@ class MetricsCollector:
 
     def _analyze_failures(self) -> Dict[str, int]:
         """실패 원인 카테고리 분류"""
-        categories = Counter()
+        categories: Dict[str, int] = {}
         for r in self._results:
-            if r["status"] == "failed" and r.get("error"):
-                error_lower = r["error"].lower()
+            status = str(r["status"]) if "status" in r else ""
+            error_val = r.get("error", "")
+            if status == "failed" and error_val:
+                error_lower = str(error_val).lower()
                 categorized = False
                 for keyword, category in self.FAILURE_CATEGORIES.items():
                     if keyword.lower() in error_lower:
-                        categories[category] += 1
+                        categories[category] = categories.get(category, 0) + 1
                         categorized = True
                         break
                 if not categorized:
-                    categories["Other"] += 1
-        return dict(categories)
+                    categories["Other"] = categories.get("Other", 0) + 1
+        return categories
 
     def _empty_metrics(self) -> Dict:
         return {

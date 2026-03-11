@@ -1,6 +1,6 @@
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException, TimeoutException
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 import config
 from utils.logger import setup_logger
 from utils.locator_utils import get_by_type
@@ -12,11 +12,11 @@ logger = setup_logger(__name__)
 
 class SeleniumEngine(BrowserEngine):
     def __init__(self):
-        self._driver = None
-        self._browser_type = None
+        self._driver: object = None
+        self._browser_type: Optional[str] = None
 
     @property
-    def driver(self) -> Any:
+    def driver(self) -> object:
         return self._driver
 
     def __enter__(self):
@@ -120,7 +120,7 @@ class SeleniumEngine(BrowserEngine):
             logger.warning(f"선택된 텍스트 가져오기 실패: {e}")
             return ""
 
-    def highlight_element(self, element=None, locator_type=None, locator_value=None):
+    def highlight_element(self, element: object = None, locator_type: Optional[str] = None, locator_value: Optional[str] = None):
         """요소를 하이라이트 표시 (빨간 테두리)"""
         if not self._driver:
             return
@@ -155,7 +155,7 @@ class SeleniumEngine(BrowserEngine):
     # Shadow DOM 지원
     # ============================================================
 
-    def find_shadow_element(self, shadow_path: List[Dict], final_locator: Dict) -> Optional[Any]:
+    def find_shadow_element(self, shadow_path: List[Dict], final_locator: Dict) -> Optional[object]:
         """
         Shadow DOM 내부 요소 찾기
 
@@ -306,7 +306,7 @@ class SeleniumEngine(BrowserEngine):
             logger.warning(f"Shadow DOM 확인 실패: {e}")
             return False
 
-    def get_all_shadow_hosts(self) -> List[Any]:
+    def get_all_shadow_hosts(self) -> List[object]:
         """
         페이지 내 모든 Shadow DOM 호스트 요소 찾기
 

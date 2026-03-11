@@ -8,7 +8,8 @@ JSON, CSV, Excel 파일을 통합 로드하고,
 import os
 import json
 import csv
-from typing import List, Dict, Optional
+from pathlib import Path
+from typing import List, Dict, Optional, Tuple, Union
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -87,14 +88,16 @@ class DataLoader:
         """JSON 파일 로드"""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data: Union[Dict, List] = json.load(f)
 
             # JSON이 리스트가 아닌 경우 처리
             if isinstance(data, dict):
                 # {"test_cases": [...]} 형태 지원
+                data_dict: dict = data
                 for key in ("test_cases", "data", "rows", "cases"):
-                    if key in data and isinstance(data[key], list):
-                        data = data[key]
+                    val = data_dict.get(key)
+                    if isinstance(val, list):
+                        data = val
                         break
                 else:
                     data = [data]  # 단일 객체 → 리스트로 감싸기
@@ -154,10 +157,11 @@ class DataLoader:
 
             result = []
             for row in rows:
+                row_tuple = tuple(row)
                 row_data = {}
                 for i, h in enumerate(headers):
-                    if i < len(row):
-                        val = row[i]
+                    if i < len(row_tuple):
+                        val = row_tuple[i]
                         row_data[h] = str(val) if val is not None else ""
                     else:
                         row_data[h] = ""

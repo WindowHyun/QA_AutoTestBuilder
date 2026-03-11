@@ -4,7 +4,7 @@
 config.yaml 의 engine 설정에 따라 SeleniumPageScanner 또는 PlaywrightPageScanner를 반환합니다.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional
 import config
 from utils.logger import setup_logger
 

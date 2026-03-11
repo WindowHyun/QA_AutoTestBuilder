@@ -9,7 +9,7 @@ import json
 import base64
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 from dataclasses import dataclass, field, asdict
 import config
 
@@ -41,7 +41,7 @@ class TestResult:
     steps: List[StepResult] = field(default_factory=list)
     error_message: Optional[str] = None
     screenshot: Optional[str] = None
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: Dict[str, object] = field(default_factory=dict)
 
     @property
     def duration_ms(self) -> int:
